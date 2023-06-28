@@ -1,2 +1,8 @@
 fastapi==0.97.0
 uvicorn==0.22.0
+tortoise-orm==0.19.3
+aiomysql==0.2.0
+aerich==0.7.1
+pydantic==1.10.9
+python-socketio==5.8.0
+quill-delta==1.0.3
