@@ -8,6 +8,7 @@ from socketio import AsyncServer, ASGIApp
 from tortoise.contrib.fastapi import register_tortoise
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
+from core.utils import load_module
 from settings import TORTOISE_CONFIG, MONGO_URI
 
 io = AsyncServer(async_mode='asgi', cors_allowed_origins="*")
@@ -17,6 +18,6 @@ mongo: AsyncIOMotorDatabase = mongo_client['editor_demo']
 
 def startup(app: FastAPI):
     register_tortoise(app, config=TORTOISE_CONFIG)
-    app.mount("", ASGIApp(io, app))
+    app.mount("/socket.io", ASGIApp(io, socketio_path=""))
 
-    from apps.document import event
+    load_module("apps.document.event")
