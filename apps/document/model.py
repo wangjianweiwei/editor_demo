@@ -3,8 +3,12 @@
 @Author：wang jian wei
 @date：2023/6/21 17:55
 """
-from tortoise.models import Model
+
 from tortoise import fields
+from tortoise.models import Model
+from tortoise.transactions import atomic
+
+from apps.document.service import Snapshot
 
 
 class Document(Model):
@@ -20,3 +24,8 @@ class Document(Model):
             "name": self.name,
             "create_at": str(self.create_at)
         }
+
+    @atomic()
+    async def save(self, *args, **kwargs):
+        await super().save(*args, **kwargs)
+        await Snapshot.initialize(self.pk)

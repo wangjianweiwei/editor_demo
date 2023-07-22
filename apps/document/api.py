@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from apps.document import model
 from ext import mongo
 from apps.document.service import Snapshot
+from apps.document import schemas
 
 router = APIRouter(prefix="/document")
 
@@ -20,16 +21,16 @@ async def documents():
     return JSONResponse({"data": [n.as_dict() for n in queryset]})
 
 
-@router.get(path="/create")
-async def create(name: str):
-    # document = model.Document(name=name)
-    # await document.save()
+@router.post(path="/create", )
+async def create(doc: schemas.Document):
+    document = model.Document(name=doc.name)
+    await document.save()
     # queryset = await model.Document.filter()
     # for n in queryset:
     #     print(n.name)
 
-    snapshot = Snapshot(doc="64970a215901772fd2bd40aa")
-    async for n in snapshot.history:
-        print(n)
+    # snapshot = Snapshot(doc="64970a215901772fd2bd40aa")
+    # async for n in snapshot.history:
+    #     print(n)
 
-    return JSONResponse({"msg": await snapshot.v})
+    return JSONResponse({"data": document.as_dict()})

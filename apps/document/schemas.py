@@ -7,4 +7,4 @@ from pydantic import BaseModel, Field
 
 
 class Document(BaseModel):
-    name: str = Field(max_length=255, min_length=1)
+    name: str = Field(max_length=255, min_length=1, default="未命名")
