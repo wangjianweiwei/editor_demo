@@ -31,9 +31,10 @@ async def subscribe(sid, data):
     await io.save_session(sid, Session(doc_id))
     io.enter_room(sid, room=doc_id)
     snapshot = Snapshot(doc_id)
-    async for n in snapshot.history({"v": {"$gt": 40}}):
-        print(n)
-    data = await snapshot.as_dict()
+    # async for n in snapshot.history({"v": {"$gt": 40}}):
+    #     print(n)
+    await snapshot.refresh()
+    data = snapshot.as_dict()
     await io.emit("initialize", data=data, to=sid)
 
 
@@ -46,7 +47,8 @@ async def disconnect(sid):
 async def compose(sid, data):
     session = await io.get_session(sid)
     snapshot = Snapshot(session.doc)
-    op = Op(**data)
+    op = Op(doc=session.doc, **data)
+    print(sid, data)
     await snapshot.compose(op)
 
     await io.emit("op", data, room=session.doc)

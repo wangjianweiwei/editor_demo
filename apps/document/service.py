@@ -7,15 +7,21 @@ import time
 from typing import Union
 
 from delta import Delta
+from pymongo.errors import DuplicateKeyError
 
 from ext import mongo
 
 DEFAULT_SNAPSHOT = {"v": 0, "delta": []}
 
 
+class Retry(Exception):
+    pass
+
+
 class History:
 
-    def __init__(self, doc: int, sort_by: str = "v"):
+    def __init__(self, snapshot: "Snapshot", doc: int, sort_by: str = "v"):
+        self.snapshot = snapshot
         self.doc = doc
         self.sort_by = sort_by
         self.conditions = dict()
@@ -30,7 +36,10 @@ class History:
         return self
 
     async def append(self, op: "Op"):
-        await mongo["history"].insert_one({"doc": self.doc, **op.as_dict()})
+        try:
+            await mongo["history"].insert_one(op.as_dict())
+        except DuplicateKeyError:
+            await self.snapshot.retry(op)
 
 
 class Snapshot:
@@ -39,7 +48,7 @@ class Snapshot:
         self.__v: Union[int, None] = None
         self.__delta: list = []
         self.doc = int(doc)
-        self.history = History(doc=doc)
+        self.history = History(snapshot=self, doc=doc)
 
     @classmethod
     async def initialize(cls, doc: int) -> "Snapshot":
@@ -69,37 +78,71 @@ class Snapshot:
         data = await mongo["snapshot"].find_one({"_id": self.doc}, {"delta": 1})
         self.__delta = data["delta"]
 
-    async def as_dict(self):
-        return {"v": await self.v, "delta": await self.delta}
+    async def refresh(self):
+        await self.refresh_delta()
+        await self.refresh_v()
+
+    def as_dict(self):
+        return {"v": self.__v, "delta": self.__delta}
 
     async def compose(self, op: "Op"):
         v = await self.v
         if v == op.v:
+            print("v == op.v")
             delta = await self.delta
             snapshot = Delta(delta)
             self.__delta = snapshot.compose(Delta(op.op)).ops
             self.__v += 1
-            await self.commit()
             await self.history.append(op)
+            await self.commit()
+
         elif v > op.v:
-            pass
+            print("v > op.v", v, op.v)
+            async for n in self.history({"v": {"$gte": op.v, "$lt": v}}):
+                conflict_op = Op(**n)
+                if conflict_op.src == op.src and conflict_op.seq == op.seq:
+                    print("已经提交过了")
+                    return
+                else:
+                    op.transform(conflict_op)
+                    op.v += 1
+
+            await self.history.append(op)
+            await self.commit()
+
         else:
+            print("else")
             pass
 
+    async def retry(self, op: "Op"):
+        await self.compose(op)
+
     async def commit(self):
-        await mongo["snapshot"].update_one({"_id": self.doc, "v": self.__v - 1},
-                                           {"$set": {"v": self.__v, "delta": self.__delta}})
+        await mongo["snapshot"].update_one({"_id": self.doc, "v": self.__v - 1}, {"$set": self.as_dict()})
 
 
 class Op:
 
-    def __init__(self, v: int, op: list, src: str, seq: int, retries: int = 0):
+    def __init__(self, doc: str, v: int, op: list, src: str, seq: int, retries: int = 0, _id=None, **kwargs):
+        if _id:
+            self._id = _id
+        else:
+            self._id = f"{doc}_{v}"
+        self.doc = doc
         self.v = v
         self.op = op
         self.src = src
         self.seq = seq
         self.retries = retries
         self.t = time.time()
+
+    def transform(self, other: "Op"):
+        """
+
+        :param other:
+        :return:
+        """
+        self.op = Delta(other.op).transform(Delta(self.op), priority="left").ops
 
     def as_dict(self):
         return self.__dict__
@@ -109,3 +152,10 @@ class Session:
 
     def __init__(self, doc: int):
         self.doc = doc
+
+
+if __name__ == '__main__':
+    o = Op(doc="8", **{'op': [{'retain': 45}, {'insert': '3'}], 'v': 183, 'src': 'be7R2fmIgV6V3GWzAAAT', 'seq': 0})
+    b = Op(doc="8", **{'op': [{'retain': 44}, {'insert': '266'}], 'v': 183, 'src': 'CMJM0E2W03l93IwHAAAV', 'seq': 0})
+    o.transform(b)
+    print(o.op)

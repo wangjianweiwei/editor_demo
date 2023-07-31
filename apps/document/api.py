@@ -17,6 +17,8 @@ router = APIRouter(prefix="/document")
 @router.get("/list")
 async def documents():
     queryset = await model.Document.all()
+    print(dir(mongo["history"]))
+    print(type(mongo["history"]))
 
     return JSONResponse({"data": [n.as_dict() for n in queryset]})
 
