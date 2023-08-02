@@ -39,3 +39,6 @@ ROUTERS = [
 ]
 
 MONGO_URI = "mongodb://admin:123456@localhost:27017/?authMechanism=DEFAULT"
+
+
+COMPOSE_MAX_RETRIES = 10

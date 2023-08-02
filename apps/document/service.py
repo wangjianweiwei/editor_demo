@@ -115,6 +115,10 @@ class Snapshot:
             pass
 
     async def retry(self, op: "Op"):
+        op.retries += 1
+        if op.retries > 10:
+            raise ValueError("超出最大重试次数")
+
         await self.compose(op)
 
     async def commit(self):
